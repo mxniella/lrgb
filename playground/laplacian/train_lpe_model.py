@@ -1,60 +1,30 @@
 import torch
-import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
-from torch_geometric.datasets import LRGBDataset
-from sklearn.metrics import r2_score
-from torch_geometric.nn import global_mean_pool
-from torch_geometric.loader import DataLoader
-from sklearn.metrics import r2_score, mean_absolute_error
-import numpy as np
-from torch_geometric.nn import GCN
+
 import matplotlib.pyplot as plt
+import numpy as np
+
 from IPython.display import clear_output
-from torch_geometric.transforms import AddLaplacianEigenvectorPE
-from torch_geometric.data import Data
-
-
-
-class newGCN(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, num_layers, out_channels):
-        super().__init__()
-        self.gcn = GCN(in_channels=in_channels, hidden_channels=hidden_channels, out_channels=hidden_channels,
-                       num_layers=6, act='relu', dropout=0.1, norm='batch', norm_kwargs={'track_running_stats': False})
-        # self.bn = torch.nn.BatchNorm1d(hidden_channels,track_running_stats=False)
-        # Add Laplacian eigenvector positional encoding transform
-        self.linear = torch.nn.Linear(hidden_channels, out_channels)
-        # Multi-layer prediction head
-        self.prediction_head = torch.nn.Sequential(
-            torch.nn.Linear(hidden_channels, hidden_channels),
-            torch.nn.BatchNorm1d(hidden_channels, track_running_stats=False),
-            torch.nn.ReLU(),
-            torch.nn.Dropout(0.2),
-
-            torch.nn.Linear(hidden_channels, hidden_channels),
-            # torch.nn.BatchNorm1d(hidden_channels, track_running_stats=False),
-            torch.nn.ReLU(),
-            # torch.nn.Dropout(0.2),
-
-            torch.nn.Linear(hidden_channels, out_channels)
-        )
-
-    def forward(self, x, edge_index, edge_attr=None, batch=None):
-        # Preprocessing node features and edge attributes
-        x = self.gcn(x=x, edge_index=edge_index, edge_attr=edge_attr)
-        x = global_mean_pool(x, batch)
-        # x = self.bn(x)
-        # x = self.linear(x)
-        x = self.prediction_head(x)
-
-        return x
+from model import newGCN
+from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_absolute_error
+from torch_geometric.data import DataLoader
+from torch_geometric.datasets import LRGBDataset
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# Load Dataset
-dataset = LRGBDataset(root='data/LRGBDataset', name='Peptides-struct')
-train_dataset = LRGBDataset(root='data/LRGBDataset', name='Peptides-struct', split='train')
-val_dataset = LRGBDataset(root='data/LRGBDataset', name='Peptides-struct', split='val')
-test_dataset = LRGBDataset(root='data/LRGBDataset', name='Peptides-struct', split='test')
+
+# Load dataset
+dataset = torch.load("peptide_dataset_with_pe.pt")
+
+# Split datasets
+train_dataset = dataset[:int(0.8 * len(dataset))]
+val_dataset = dataset[int(0.8 * len(dataset)):int(0.9 * len(dataset))]
+test_dataset = dataset[int(0.9 * len(dataset)):]
+
+# Create data loaders
+train_loader = DataLoader(train_dataset, batch_size=200, shuffle=False)
+val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
 # Initialize the GCN Model
 model = newGCN(
@@ -63,9 +33,10 @@ model = newGCN(
     num_layers=6,
     out_channels=11  # Number of regression tasks
 ).to(device)
-print(model)
+
 # Optimizer
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
 # Learning rate scheduler
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer,
@@ -75,37 +46,28 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     min_lr=1e-5
 )
 
-torch.manual_seed(3)
-
 print(f'Number of training graphs: {len(train_dataset)}')
 print(f'Number of test graphs: {len(test_dataset)}')
 
-train_loader = DataLoader(train_dataset, batch_size=200, shuffle=False)
-val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
-
 # Define the training loop
+torch.manual_seed(3)
 criterion = torch.nn.L1Loss()  # For MAE-based regression
-
-
-""" def compute_laplacian_pe(data, k_lap=8):
-    transform = AddLaplacianEigenvectorPE(k=k_lap)
-    return transform(data)
- """
 
 def train():
     model.train()
     total_loss = 0
+
     for data in train_loader:
-        # data = compute_laplacian_pe(data)
         data = data.to(device)
         optimizer.zero_grad()
         data.x = data.x.float()
+
         out = model(x=data.x, edge_index=data.edge_index, edge_attr=data.edge_attr, batch=data.batch)
         loss = criterion(out, data.y.float())
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
+
     return total_loss / len(train_loader)
 
 

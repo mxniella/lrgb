@@ -6,3 +6,4 @@ ipykernel
 scikit-learn
 scipy
 matplotlib
+numpy==1.9
