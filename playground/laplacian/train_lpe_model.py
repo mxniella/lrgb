@@ -14,7 +14,7 @@ from torch_geometric.datasets import LRGBDataset
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Load dataset
-dataset = torch.load("peptide_dataset_with_pe.pt")
+dataset = torch.load("peptide_struct-transformed.pt")
 
 # Split datasets
 train_dataset = dataset[:int(0.8 * len(dataset))]
@@ -28,7 +28,7 @@ test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
 # Initialize the GCN Model
 model = newGCN(
-    in_channels=dataset.num_node_features,
+    in_channels=12,
     hidden_channels=235,
     num_layers=6,
     out_channels=11  # Number of regression tasks
@@ -45,9 +45,6 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     patience=20,
     min_lr=1e-5
 )
-
-print(f'Number of training graphs: {len(train_dataset)}')
-print(f'Number of test graphs: {len(test_dataset)}')
 
 # Define the training loop
 torch.manual_seed(3)

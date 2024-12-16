@@ -21,7 +21,7 @@ def main():
         transformed_dataset.append(data)
 
     # Save the transformed dataset
-    torch.save(transformed_dataset, "/data/peptide_struct-transformed.pt")
+    torch.save(transformed_dataset, "peptide_struct-transformed.pt")
     print("Finished Transformation")
 
 

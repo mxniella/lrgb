@@ -38,14 +38,11 @@ class newGCN(torch.nn.Module):
     def forward(self, x, edge_index, edge_attr=None, batch=None):
         # pass trough GCN
         x = self.gcn(x=x, edge_index=edge_index, edge_attr=edge_attr)
-        print(f"After GCN: {x.shape}")
         
         # perform global pooling
         x = global_mean_pool(x, batch)
-        print(f"After global pooling: {x.shape}")
 
         # pass through prediciton head
         x = self.prediction_head(x)
-        print(f"After prediction head: {x.shape}")
 
         return x
